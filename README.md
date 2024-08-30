@@ -29,9 +29,7 @@ $ pip install .
 
 ## Running the included examples
 
-1. After installation, download `example_data.zip` from this URL: 
-
-https://beliveau-shared.s3.us-east-2.amazonaws.com/cellcyclenet/data/example_data.zip
+1. After installation, download `example_data.zip` from [here](https://beliveau-shared.s3.us-east-2.amazonaws.com/cellcyclenet/data/example_data.zip).
 
 2. Try running the included examples on these example files using the included example notebooks:
 
