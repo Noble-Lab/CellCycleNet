@@ -4,6 +4,10 @@ from setuptools import setup, find_packages
 
 PACKAGE_NAME = 'cellcyclenet'
 
+with open("README.md", "r", encoding="utf-8") as fh:
+    '''Read the contents of the README.md file.'''
+    long_description = fh.read()
+
 def read_version():
     '''Dynamically read version from authoritative _version.py file.'''
     version = {}
@@ -13,6 +17,9 @@ def read_version():
 
 setup(
     name=PACKAGE_NAME,
+    url="https://github.com/Noble-Lab/CellCycleNet",
+    description="Python package for predicting cell cycle stage from DAPI images",
+    long_description=long_description,
     version=read_version(),
     packages=find_packages(),
     include_package_data=True,  # Include package data as specified in MANIFEST.in
