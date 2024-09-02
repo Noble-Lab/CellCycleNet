@@ -429,5 +429,5 @@ class CellCycleNet:
     ################################################################################################
 
     def save_model(self, save_path=None):
-        if save_path == None: save_path = f'{datetime.now().strftime('%Y%m%d_%H:%M:%S')}.pt'
+        if save_path == None: save_path = f'{datetime.now().strftime("%Y%m%d_%H:%M:%S")}.pt'
         torch.save(self.weights_best, save_path)
