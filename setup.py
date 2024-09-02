@@ -20,6 +20,7 @@ setup(
     url="https://github.com/Noble-Lab/CellCycleNet",
     description="Python package for predicting cell cycle stage from DAPI images",
     long_description=long_description,
+    long_description_content_type="text/markdown",
     version=read_version(),
     packages=find_packages(),
     include_package_data=True,  # Include package data as specified in MANIFEST.in
