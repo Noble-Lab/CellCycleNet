@@ -20,7 +20,14 @@ setup(
         PACKAGE_NAME: ['models/*.pt'],  # Include all .pt files in models/
     },
     install_requires=[
-        # List your package dependencies here, e.g.,
-        # 'numpy',
+        'matplotlib==3.9.1',
+        'numpy==2.0.1',
+        'pandas==2.2.2',
+        'scikit-image==0.24.0',
+        'scikit-learn==1.5.1',
+        'tifffile',
+        'torch==2.3.1',
+        'torchaudio==2.3.1',
+        'torchvision==0.18.1',
     ],
 )
