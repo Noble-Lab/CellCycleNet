@@ -15,7 +15,7 @@ setup(
     name=PACKAGE_NAME,
     version=read_version(),
     packages=find_packages(),
-    include_package_data=True,  # iInclude package data as specified in MANIFEST.in
+    include_package_data=True,  # Include package data as specified in MANIFEST.in
     package_data={
         PACKAGE_NAME: ['models/*.pt'],  # Include all .pt files in models/
     },
@@ -25,7 +25,7 @@ setup(
         'pandas==2.2.2',
         'scikit-image==0.24.0',
         'scikit-learn==1.5.1',
-        'tifffile',
+        'tifffile==2024.7.24',
         'torch==2.3.1',
         'torchaudio==2.3.1',
         'torchvision==0.18.1',
