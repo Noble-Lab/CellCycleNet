@@ -4,13 +4,9 @@
 
 ## Installation
 
-**Option 1:** Install via `pip`:
+**Option 1:** Install via pip: `pip install cellcyclenet`
 
-	```
-	$ pip install cellcyclenet
-	```
-
-**Option 2:** Install via conda or build the development conda environment: [see documentation](https://github.com/Noble-Lab/CellCycleNet)
+**Option 2:** Install via conda or build the development conda environment: [see documentation](https://github.com/Noble-Lab/CellCycleNet/blob/pypi_package_dev/docs/dev_env_setup.md)
 
 ## Running the included examples
 
