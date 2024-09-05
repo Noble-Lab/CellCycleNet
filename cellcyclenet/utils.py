@@ -61,7 +61,7 @@ def _calc_norm_and_scale_factor(image_fns, mask_fns, num_cores):
     norm_factor = np.median(median_pixels)
 
     # scale factor is median of nuclear dims #
-    pretrained_dims = np.array([25, 50, 50]) # FIXME replace with actual values 
+    pretrained_dims = np.array([16, 37, 37]) # FIXME replace with actual values 
     user_dims = np.median(median_dims, axis=0)
     scale_factor = user_dims / pretrained_dims
     
