@@ -42,12 +42,10 @@ from sklearn.metrics import confusion_matrix, roc_curve, roc_auc_score
 
 class CCN_Dataset(Dataset):
     '''Create a class to hold the PyTorch Dataset, input to PyTorch Dataloader.'''
-    def __init__(self, X, y, norm_factor, scale_factors, transform, lazy_load):
+    def __init__(self, X, y, transform, lazy_load):
         self.X = X
         self.y = y
         self.transform = transform
-        self.norm_factor = norm_factor
-        self.scale_factors = scale_factors
         self.lazy_load = lazy_load
 
     def __len__(self):
@@ -66,8 +64,6 @@ class CCN_Dataset(Dataset):
         # if initialized with image fns (lazy loading), load, normalize, and scale image #
         else:
             image = imread(self.X[index])
-            image = downscale_local_mean(image, self.scale_factors)
-            image = image / self.norm_factor
 
         # convert image to float 32 #
         X = np.asarray(image, dtype=np.float32)
@@ -108,24 +104,18 @@ class CellCycleNet:
 
     ################################################################################################
 
-    def create_dataset(self, dataframe, norm_factor, scale_factors, split_data=False, seed=15):
+    def create_dataset(self, dataframe, split_data=False, seed=15):
         '''
         Creates training, validation, and testing dataframes containing GT labels and image filenames for each nucleus.
         (NOTE: it is assumed that the order of labels in the dataframe is the same as order of images in image_dir.)
             Arguments:
                 - image_dir [str] : path to directory of single nucleus images
                 - dataframe [pd.DataFrame] : dataframe containing GT labels; if None, it is assumed that user wants to proceed without using labels (use case 1)
-                - norm_factor [int] : images are divided pixelwise by this value during loading (calculated as median value of the medians of each input image)
-                - scale_factor [tuple] : Z,Y,X scale factors
                 - split_data [bool] : flag to determine if input data is split into train/val/test sets (use case 2) or just a single dataset (use case 1)
                 - seed [int] : random seed to use for train/val/test split
             Outputs:
                 - train, val, test [pd.DataFrame] : dataframe containing GT label (if inputted) + image filename for each nucleus
         '''
-        # set norm / scale factors as attributes (to be called by .train() and .predict() when creating dataloaders)
-        self.norm_factor = norm_factor
-        self.scale_factors = scale_factors
-
         ### FIXME small DF for debugging ###
         # dataframe = dataframe.iloc[::15]
 
@@ -234,13 +224,11 @@ class CellCycleNet:
         train_X_fn = train_df['filename'].values
         train_y = np.where(train_df['label'].values == 'G1', 0, 1)
         if lazy_load:
-            train_dataloader = DataLoader(CCN_Dataset(train_X_fn, train_y, self.norm_factor, self.scale_factors, transform=transform, lazy_load=lazy_load),
+            train_dataloader = DataLoader(CCN_Dataset(train_X_fn, train_y, transform=transform, lazy_load=lazy_load),
                                                       batch_size=batch_size, shuffle=False)
         else:
             train_X = np.asarray([imread(fn) for fn in train_X_fn])
-            train_X_ds = np.asarray([downscale_local_mean(image, self.scale_factors) for image in train_X])
-            train_X_norm = np.asarray([image / self.norm_factor for image in train_X_ds])
-            train_dataloader = DataLoader(CCN_Dataset(train_X_norm, train_y, self.norm_factor, self.scale_factors, transform=transform, lazy_load=lazy_load),
+            train_dataloader = DataLoader(CCN_Dataset(train_X, train_y, transform=transform, lazy_load=lazy_load),
                                                       batch_size=batch_size, shuffle=False)
         
         # create dataloader for validation data #
@@ -249,13 +237,11 @@ class CellCycleNet:
         val_y = np.where(val_df['label'].values == 'G1', 0, 1)
 
         if lazy_load:
-            val_dataloader = DataLoader(CCN_Dataset(val_X_fn, val_y, self.norm_factor, self.scale_factors, transform=None, lazy_load=lazy_load),
+            val_dataloader = DataLoader(CCN_Dataset(val_X_fn, val_y, transform=None, lazy_load=lazy_load),
                                         batch_size=batch_size, shuffle=False)
         else:
             val_X = np.asarray([imread(fn) for fn in val_X_fn])
-            val_X_ds = np.asarray([downscale_local_mean(image, self.scale_factors) for image in val_X])
-            val_X_norm = np.asarray([image / self.norm_factor for image in val_X_ds])
-            val_dataloader = DataLoader(CCN_Dataset(val_X_norm, val_y, self.norm_factor, self.scale_factors, transform=None, lazy_load=lazy_load),
+            val_dataloader = DataLoader(CCN_Dataset(val_X, val_y, transform=None, lazy_load=lazy_load),
                                         batch_size=batch_size, shuffle=False)
 
         # track val acc for each epoch to check for improvement #
@@ -313,7 +299,7 @@ class CellCycleNet:
 
         X_fn = dataframe['filename'].values
         y = np.where(dataframe['label'].values == 'G1', 0, 1) if with_labels else np.zeros(len(X_fn))
-        dataloader = DataLoader(CCN_Dataset(X_fn, y, self.norm_factor, self.scale_factors, transform=None, lazy_load=True), batch_size=4, shuffle=False)
+        dataloader = DataLoader(CCN_Dataset(X_fn, y, transform=None, lazy_load=True), batch_size=4, shuffle=False)
 
         # Run through network #
         with torch.no_grad():
