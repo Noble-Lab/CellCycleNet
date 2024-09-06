@@ -61,7 +61,7 @@ def _calc_norm_and_scale_factor(image_fns, mask_fns, num_cores):
     norm_factor = np.median(median_pixels)
 
     # scale factor is median of nuclear dims #
-    pretrained_dims = np.array([16, 37, 37]) # FIXME replace with actual values 
+    pretrained_dims = np.array([16, 37, 37])
     user_dims = np.median(median_dims, axis=0)
     scale_factor = user_dims / pretrained_dims
     
@@ -99,22 +99,16 @@ def _gen_SNI(args):
         out_dims = np.array([int(in_dim / scale) for in_dim, scale in zip(obj_crop.shape, scale_factor)])
         obj_rescale = resize_local_mean(obj_norm, out_dims)
 
-        # pad object to get consistent dimensions #
-        x = 75; y = 75; z = 45 # size of images used for training CCN #
+        # SNIs will be padded to have 1/8 of their diameter on each side #
         obj_z, obj_y, obj_x = obj_rescale.shape
+        z, y, x = [1.25*dim for dim in [obj_z, obj_y, obj_x]]
 
-        # image larger than expected dimensions #
-        if (obj_x > x) or (obj_y > y) or (obj_z > z):
-            os.makedirs(f'{output_dir}/large_objects/', exist_ok=True)
-            imwrite(f'{output_dir}/large_objects/{os.path.splitext(os.path.basename(args[0]))[0]}_obj_{obj_num}.tif', obj_rescale)
-
-        # else pad + write image #
-        else:
-            x_add = (int(floor((x - obj_x) / 2)), int(ceil((x - obj_x) / 2)))
-            y_add = (int(floor((y - obj_y) / 2)), int(ceil((y - obj_y) / 2)))
-            z_add = (int(floor((z - obj_z) / 2)), int(ceil((z - obj_z) / 2)))
-            obj_pad = np.pad(obj_rescale, [z_add, y_add, x_add])
-            imwrite(f'{output_dir}/{os.path.splitext(os.path.basename(args[0]))[0]}_obj_{obj_num}.tif', obj_pad)
+        # pad image + save #
+        x_add = (int(floor((x - obj_x) / 2)), int(ceil((x - obj_x) / 2)))
+        y_add = (int(floor((y - obj_y) / 2)), int(ceil((y - obj_y) / 2)))
+        z_add = (int(floor((z - obj_z) / 2)), int(ceil((z - obj_z) / 2)))
+        obj_pad = np.pad(obj_rescale, [z_add, y_add, x_add])
+        imwrite(f'{output_dir}/{os.path.splitext(os.path.basename(args[0]))[0]}_obj_{obj_num}.tif', obj_pad)
 
 
 def _gen_SNI_label(args):
@@ -152,22 +146,16 @@ def _gen_SNI_label(args):
         out_dims = np.array([int(in_dim / scale) for in_dim, scale in zip(obj_crop.shape, scale_factor)])
         obj_rescale = resize_local_mean(obj_norm, out_dims)
 
-        # pad object to get consistent dimensions #
-        x = 75; y = 75; z = 45 # size of images used for training CCN #
+        # SNIs will be padded to have 1/8 of their diameter on each side #
         obj_z, obj_y, obj_x = obj_rescale.shape
+        z, y, x = [1.25*dim for dim in [obj_z, obj_y, obj_x]]
 
-        # image larger than expected dimensions #
-        if (obj_x > x) or (obj_y > y) or (obj_z > z):
-            os.makedirs(f'{output_dir}/large_objects/', exist_ok=True)
-            imwrite(f'{output_dir}/large_objects/{os.path.splitext(os.path.basename(args[0]))[0]}_obj_{obj_num}_class_{label_str}.tif', obj_rescale)
-
-        # else pad + write image #
-        else:
-            x_add = (int(floor((x - obj_x) / 2)), int(ceil((x - obj_x) / 2)))
-            y_add = (int(floor((y - obj_y) / 2)), int(ceil((y - obj_y) / 2)))
-            z_add = (int(floor((z - obj_z) / 2)), int(ceil((z - obj_z) / 2)))
-            obj_pad = np.pad(obj_rescale, [z_add, y_add, x_add])
-            imwrite(f'{output_dir}/{os.path.splitext(os.path.basename(args[0]))[0]}_obj_{obj_num}_class_{label_str}.tif', obj_pad)
+        # pad image + save #
+        x_add = (int(floor((x - obj_x) / 2)), int(ceil((x - obj_x) / 2)))
+        y_add = (int(floor((y - obj_y) / 2)), int(ceil((y - obj_y) / 2)))
+        z_add = (int(floor((z - obj_z) / 2)), int(ceil((z - obj_z) / 2)))
+        obj_pad = np.pad(obj_rescale, [z_add, y_add, x_add])
+        imwrite(f'{output_dir}/{os.path.splitext(os.path.basename(args[0]))[0]}_obj_{obj_num}_class_{label_str}.tif', obj_pad)
 
 
 def _gen_DF(SNI_fns, with_labels):
