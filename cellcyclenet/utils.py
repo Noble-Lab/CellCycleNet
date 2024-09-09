@@ -17,7 +17,14 @@ from multiprocessing.pool import Pool
 ####################################################################################################
 
 def _load_and_calc_params(args):
-    '''Loads tile + mask --> calculates median pixel and median nuclear dims (avoids loading dataset twice).'''
+    '''
+    Loads tile + mask --> calculates median non-zero pixel value + median nuclear diameter in that tile.
+        Args:
+            - args [list of str] : image and mask filenames
+        Out:
+            - median_pixel [float] : median non-zero pixel value
+            - median_dims [np.ndarray] : median nuclear diameter along Z,Y,X axes
+    '''
     # load image + mask #
     image_fn = args[0]
     mask_fn = args[1]
@@ -41,7 +48,14 @@ def _load_and_calc_params(args):
 
 def _calc_norm_and_scale_factor(image_fns, mask_fns, num_cores):
     '''
-    docstring goes here
+    Uses DAPI images + corresponding masks to calculate median non-zero pixel value + median nuclear diameter across entire dataset.
+        Args:
+            - image_fns [list] : filenames for DAPI images (format as 'tile_n.tif')
+            - mask_fns [list] : filenames for segmentation masks (format as 'mask_n.tif')
+            - num_cores [int] : number of cores to use for parallel processing (default: None uses a single core)
+        Out:
+            - norm_factor [float] : median non-zero pixel value across entire dataset
+            - scale_factor [np.ndarray] : downsampling factors along each axis to apply to user's images such that they match dim. of pretraining images
     '''
     # package image and mask fns together for multiprocessing compatiability #
     image_and_mask_fns = [(i_fn, m_fn) for i_fn, m_fn in zip(image_fns, mask_fns)]
@@ -70,6 +84,13 @@ def _calc_norm_and_scale_factor(image_fns, mask_fns, num_cores):
 ####################################################################################################
 
 def _gen_SNI(args):
+    '''
+    Generates unlabeled single-nucleus images for a given tile.
+        Args:
+            - args [list] : contains image filename, mask filename, path to output directory, normalization factor, and scaling factor
+        Out:
+            - None
+    '''
     # load image / mask pair #
     image = imread(args[0])
     mask = imread(args[1])
@@ -112,6 +133,13 @@ def _gen_SNI(args):
 
 
 def _gen_SNI_label(args):
+    '''
+    Generates labeled single-nucleus images for a given tile.
+        Args:
+            - args [list] : contains image filename, mask filename, label array filename, path to output directory, normalization factor, and scaling factor
+        Out:
+            - None
+    '''
     # load image / mask pair #
     image = imread(args[0])
     mask = imread(args[1])
@@ -159,20 +187,31 @@ def _gen_SNI_label(args):
 
 
 def _gen_DF(SNI_fns, with_labels):
-    
+    '''
+    Generates a dataframe containing a tile number, object number, filename, (and GT label) for each generated SNI.
+        Args:
+            - SNI_fns [list] : filenames for each generated SNI
+            - with_labels [bool] : flag to determine if a column for GT labels is added to the dataframe
+        Out:
+            - df [pd.DataFrame] : SNI dataframe
+    '''
+    # extract tile num and object num from SNI filename #
     extract_numbers = lambda filename : list(map(int, re.findall(r'\d+', filename)))
     nums = np.asarray([extract_numbers(fn.split('/')[-1]) for fn in SNI_fns])
     tile_nums = nums[:,0]
     obj_nums = nums[:,1]
 
+    # create dict for dataframe #
     df_dict = {'tile_num': tile_nums,
                'obj_num': obj_nums,
                'filename': SNI_fns}
     
+    # if SNIs are labeled, create entry for GT labels #
     if with_labels:
         labels = np.asarray(['G1' if fn.split('_')[-1].split('.')[0] == 'G1' else 'S/G2' for fn in SNI_fns])
         df_dict['label'] = labels
 
+    # save dataframe #
     df_fn = 'CCN_single_nuclei_labeled.csv' if with_labels else 'CCN_single_nuclei.csv'
     df = pd.DataFrame.from_dict(df_dict)
     df.to_csv(df_fn, index=False)
@@ -180,7 +219,13 @@ def _gen_DF(SNI_fns, with_labels):
 
 
 def _validate_paths(dir):
-
+    '''
+    Ensures that user inputted paths are exist and contain valid images, raises errors accordingly.
+        Args:
+            - dir [str] : path to user specified directory
+        Out:
+            - None
+    '''
     # check that provided dirs exist #
     if not os.path.exists(dir):
         raise FileNotFoundError(f'The path {dir} does not exist.')
@@ -197,7 +242,17 @@ def _validate_paths(dir):
 ####################################################################################################
 
 def generate_images(image_dir, mask_dir, output_dir=None, return_df=False, num_cores=None):
-    
+    '''
+    Generates unlabeled single-nucleus images from tiled data for input to model for prediction only.
+        Args:
+            - image_dir [str] : path to directory where DAPI images are located
+            - mask_dir [str] : path to directory where segmentation masks are located
+            - output_dir [str] : path to directory where SNIs will be saved (default: None creates a new directory named 'single_nucleus_images')
+            - return_df [bool] : flag to choose if function returns SNI dataframe (default: False)
+            - num_cores [int] : number of cores to use for parallel processing (default: None uses a single core)
+        Out:
+            - df [pd.DataFrame] : dataframe containing SNI tile + object numbers and filenames (if return_df = True)
+    '''
     # convert path to abs path #
     image_dir = os.path.abspath(image_dir)
     mask_dir = os.path.abspath(mask_dir)
@@ -241,7 +296,18 @@ def generate_images(image_dir, mask_dir, output_dir=None, return_df=False, num_c
 ####################################################################################################
 
 def generate_images_labeled(image_dir, mask_dir, label_dir, output_dir=None, return_df=False, num_cores=None):
-
+    '''
+    Generates labeled single-nucleus images from tiled data for input to model for prediction or fine-tuning.
+        Args:
+            - image_dir [str] : path to directory where DAPI images are located
+            - mask_dir [str] : path to directory where segmentation masks are located
+            - label_dir [str] : path to directory where label arrays are located
+            - output_dir [str] : path to directory where SNIs will be saved (default: None creates a new directory named 'single_nucleus_images')
+            - return_df [bool] : flag to choose if function returns SNI dataframe (default: False)
+            - num_cores [int] : number of cores to use for parallel processing (default: None uses a single core)
+        Out:
+            - df [pd.DataFrame] : dataframe containing SNI tile + object numbers and filenames (if return_df = True)
+    '''
     # convert path to abs path #
     image_dir = os.path.abspath(image_dir)
     mask_dir = os.path.abspath(mask_dir)
