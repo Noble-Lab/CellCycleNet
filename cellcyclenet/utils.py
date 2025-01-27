@@ -28,6 +28,7 @@ def _load_and_calc_params(args):
     # load image + mask #
     image_fn = args[0]
     mask_fn = args[1]
+    is_3d = args[2]
     image = imread(image_fn)
     mask = imread(mask_fn)
 
@@ -37,28 +38,34 @@ def _load_and_calc_params(args):
 
     # calculate median nuclear dims #
     prop = regionprops(mask)
-    dims = np.array([(prop[k].bbox[3]-prop[k].bbox[0], # Z
-                      prop[k].bbox[4]-prop[k].bbox[1], # Y
-                      prop[k].bbox[5]-prop[k].bbox[2]) # X
-                      for k in range(len(prop))])
+    if is_3d:
+        dims = np.array([(prop[k].bbox[3]-prop[k].bbox[0], # Z
+                          prop[k].bbox[4]-prop[k].bbox[1], # Y
+                          prop[k].bbox[5]-prop[k].bbox[2]) # X
+                          for k in range(len(prop))])
+    else:
+        dims = np.array([(prop[k].bbox[2]-prop[k].bbox[0], # Y
+                          prop[k].bbox[3]-prop[k].bbox[1]) # X
+                          for k in range(len(prop))])
     median_dims = np.median(dims, axis=0).astype(int)
 
     return (median_pixel, median_dims)
 
 
-def _calc_norm_and_scale_factor(image_fns, mask_fns, num_cores):
+def _calc_norm_and_scale_factor(image_fns, mask_fns, num_cores, is_3d):
     '''
     Uses DAPI images + corresponding masks to calculate median non-zero pixel value + median nuclear diameter across entire dataset.
         Args:
             - image_fns [list] : filenames for DAPI images (format as 'tile_n.tif')
             - mask_fns [list] : filenames for segmentation masks (format as 'mask_n.tif')
             - num_cores [int] : number of cores to use for parallel processing (default: None uses a single core)
+            - is_3d [bool] : flag to determine if images are 3D or 2D
         Out:
             - norm_factor [float] : median non-zero pixel value across entire dataset
             - scale_factor [np.ndarray] : downsampling factors along each axis to apply to user's images such that they match dim. of pretraining images
     '''
     # package image and mask fns together for multiprocessing compatiability #
-    image_and_mask_fns = [(i_fn, m_fn) for i_fn, m_fn in zip(image_fns, mask_fns)]
+    image_and_mask_fns = [(i_fn, m_fn, is_3d) for i_fn, m_fn in zip(image_fns, mask_fns)]
 
     # compute median non-zero pixel value for each tile #
     if num_cores == None:
@@ -75,7 +82,10 @@ def _calc_norm_and_scale_factor(image_fns, mask_fns, num_cores):
     norm_factor = np.median(median_pixels)
 
     # scale factor is median of nuclear dims #
-    pretrained_dims = np.array([16, 37, 37])
+    if is_3d:
+        pretrained_dims = np.array([16, 37, 37])
+    else:
+        pretrained_dims = np.array([37, 37])
     user_dims = np.median(median_dims, axis=0)
     scale_factor = user_dims / pretrained_dims
     
@@ -98,6 +108,7 @@ def _gen_SNI(args):
     output_dir = args[2]
     norm_factor = args[3]
     scale_factor = args[4]
+    is_3d = args[5]
 
     # for each object in the mask... #
     obj_nums = np.unique(mask)[1:]
@@ -108,10 +119,15 @@ def _gen_SNI(args):
         obj = np.where(obj_mask, image, 0)
 
         # crop out empty rows/columns/planes #
-        full_rows = np.any(obj, axis=(1,2))
-        full_columns = np.any(obj, axis=(0,2))
-        full_stacks = np.any(obj, axis=(0,1))
-        obj_crop = obj[full_rows][:, full_columns][:, :, full_stacks]
+        if is_3d:
+            full_rows = np.any(obj, axis=(1,2))
+            full_columns = np.any(obj, axis=(0,2))
+            full_stacks = np.any(obj, axis=(0,1))
+            obj_crop = obj[full_rows][:, full_columns][:, :, full_stacks]
+        else:
+            full_rows = np.any(obj, axis=1)
+            full_columns = np.any(obj, axis=0)
+            obj_crop = obj[full_rows][:, full_columns]
 
         # normalize image based on norm factor #
         obj_norm = obj_crop / norm_factor
@@ -121,14 +137,21 @@ def _gen_SNI(args):
         obj_rescale = resize_local_mean(obj_norm, out_dims)
 
         # SNIs will be padded to have 1/8 of their diameter on each side #
-        obj_z, obj_y, obj_x = obj_rescale.shape
-        z, y, x = [1.25*dim for dim in [obj_z, obj_y, obj_x]]
+        if is_3d:
+            obj_z, obj_y, obj_x = obj_rescale.shape
+            z, y, x = [1.25*dim for dim in [obj_z, obj_y, obj_x]]
+        else:
+            obj_y, obj_x = obj_rescale.shape
+            y, x = [1.25*dim for dim in [obj_y, obj_x]]
 
-        # pad image + save #
+        # calculate padding #
         x_add = (int(floor((x - obj_x) / 2)), int(ceil((x - obj_x) / 2)))
         y_add = (int(floor((y - obj_y) / 2)), int(ceil((y - obj_y) / 2)))
-        z_add = (int(floor((z - obj_z) / 2)), int(ceil((z - obj_z) / 2)))
-        obj_pad = np.pad(obj_rescale, [z_add, y_add, x_add])
+        if is_3d: z_add = (int(floor((z - obj_z) / 2)), int(ceil((z - obj_z) / 2)))
+
+        # pad image + save #
+        if is_3d: obj_pad = np.pad(obj_rescale, [z_add, y_add, x_add])
+        else: obj_pad = np.pad(obj_rescale, [y_add, x_add])
         imwrite(f'{output_dir}/{os.path.splitext(os.path.basename(args[0]))[0]}_obj_{obj_num}.tif', obj_pad)
 
 
@@ -148,6 +171,7 @@ def _gen_SNI_label(args):
     output_dir = args[3]
     norm_factor = args[4]
     scale_factor = args[5]
+    is_3d = args[6]
 
     # for each object in the mask... #
     obj_nums = np.unique(mask)[1:]
@@ -162,10 +186,15 @@ def _gen_SNI_label(args):
         label_str = 'G1' if label == 1 else 'S-G2'
 
         # crop out empty rows/columns/planes #
-        full_rows = np.any(obj, axis=(1,2))
-        full_columns = np.any(obj, axis=(0,2))
-        full_stacks = np.any(obj, axis=(0,1))
-        obj_crop = obj[full_rows][:, full_columns][:, :, full_stacks]
+        if is_3d:
+            full_rows = np.any(obj, axis=(1,2))
+            full_columns = np.any(obj, axis=(0,2))
+            full_stacks = np.any(obj, axis=(0,1))
+            obj_crop = obj[full_rows][:, full_columns][:, :, full_stacks]
+        else:
+            full_rows = np.any(obj, axis=1)
+            full_columns = np.any(obj, axis=0)
+            obj_crop = obj[full_rows][:, full_columns]
 
         # normalize image based on norm factor #
         obj_norm = obj_crop / norm_factor
@@ -175,14 +204,21 @@ def _gen_SNI_label(args):
         obj_rescale = resize_local_mean(obj_norm, out_dims)
 
         # SNIs will be padded to have 1/8 of their diameter on each side #
-        obj_z, obj_y, obj_x = obj_rescale.shape
-        z, y, x = [1.25*dim for dim in [obj_z, obj_y, obj_x]]
+        if is_3d:
+            obj_z, obj_y, obj_x = obj_rescale.shape
+            z, y, x = [1.25*dim for dim in [obj_z, obj_y, obj_x]]
+        else:
+            obj_y, obj_x = obj_rescale.shape
+            y, x = [1.25*dim for dim in [obj_y, obj_x]]
 
-        # pad image + save #
+        # calculate padding #
         x_add = (int(floor((x - obj_x) / 2)), int(ceil((x - obj_x) / 2)))
         y_add = (int(floor((y - obj_y) / 2)), int(ceil((y - obj_y) / 2)))
-        z_add = (int(floor((z - obj_z) / 2)), int(ceil((z - obj_z) / 2)))
-        obj_pad = np.pad(obj_rescale, [z_add, y_add, x_add])
+        if is_3d: z_add = (int(floor((z - obj_z) / 2)), int(ceil((z - obj_z) / 2)))
+
+        # pad image + save #
+        if is_3d: obj_pad = np.pad(obj_rescale, [z_add, y_add, x_add])
+        else: obj_pad = np.pad(obj_rescale, [y_add, x_add])
         imwrite(f'{output_dir}/{os.path.splitext(os.path.basename(args[0]))[0]}_obj_{obj_num}_class_{label_str}.tif', obj_pad)
 
 
@@ -241,7 +277,7 @@ def _validate_paths(dir):
 
 ####################################################################################################
 
-def generate_images(image_dir, mask_dir, output_dir=None, return_df=False, num_cores=None):
+def generate_images(image_dir, mask_dir, output_dir=None, return_df=False, num_cores=None, is_3d=True):
     '''
     Generates unlabeled single-nucleus images from tiled data for input to model for prediction only.
         Args:
@@ -278,15 +314,15 @@ def generate_images(image_dir, mask_dir, output_dir=None, return_df=False, num_c
     mask_fns = sorted([os.path.join(mask_dir, fn) for fn in os.listdir(mask_dir)])
 
     # calculate normalization and scaling factors #
-    norm_factor, scale_factor = _calc_norm_and_scale_factor(image_fns, mask_fns, num_cores)
+    norm_factor, scale_factor = _calc_norm_and_scale_factor(image_fns, mask_fns, num_cores, is_3d)
 
     # generate SNIs #
     if num_cores == None:
         for image_fn, mask_fn in zip(image_fns, mask_fns):
-            _gen_SNI([image_fn, mask_fn, output_dir, norm_factor, scale_factor])
+            _gen_SNI([image_fn, mask_fn, output_dir, norm_factor, scale_factor, is_3d])
     else:
         with Pool(num_cores) as pool:
-            pool.map(_gen_SNI, [(image_fn, mask_fn, output_dir, norm_factor, scale_factor) for image_fn, mask_fn in zip(image_fns, mask_fns)])
+            pool.map(_gen_SNI, [(image_fn, mask_fn, output_dir, norm_factor, scale_factor, is_3d) for image_fn, mask_fn in zip(image_fns, mask_fns)])
 
     # generate DF #
     SNI_fns = sorted([os.path.join(output_dir, fn) for fn in os.listdir(output_dir) if os.path.isfile(os.path.join(output_dir, fn))])
@@ -295,7 +331,7 @@ def generate_images(image_dir, mask_dir, output_dir=None, return_df=False, num_c
 
 ####################################################################################################
 
-def generate_images_labeled(image_dir, mask_dir, label_dir, output_dir=None, return_df=False, num_cores=None):
+def generate_images_labeled(image_dir, mask_dir, label_dir, output_dir=None, return_df=False, num_cores=None, is_3d=True):
     '''
     Generates labeled single-nucleus images from tiled data for input to model for prediction or fine-tuning.
         Args:
@@ -335,15 +371,15 @@ def generate_images_labeled(image_dir, mask_dir, label_dir, output_dir=None, ret
     label_fns = sorted([os.path.join(label_dir, fn) for fn in os.listdir(label_dir)])
 
     # calculate normalization and scaling factors #
-    norm_factor, scale_factor = _calc_norm_and_scale_factor(image_fns, mask_fns, num_cores)
+    norm_factor, scale_factor = _calc_norm_and_scale_factor(image_fns, mask_fns, num_cores, is_3d)
 
     # generate SNIs #
     if num_cores == None:
         for image_fn, mask_fn, label_fn in zip(image_fns, mask_fns, label_fns):
-            _gen_SNI_label([image_fn, mask_fn, label_fn, output_dir, norm_factor, scale_factor])
+            _gen_SNI_label([image_fn, mask_fn, label_fn, output_dir, norm_factor, scale_factor, is_3d])
     else:
         with Pool(num_cores) as pool:
-            pool.map(_gen_SNI_label, [(image_fn, mask_fn, label_fn, output_dir, norm_factor, scale_factor) for image_fn, mask_fn, label_fn in zip(image_fns, mask_fns, label_fns)])
+            pool.map(_gen_SNI_label, [(image_fn, mask_fn, label_fn, output_dir, norm_factor, scale_factor, is_3d) for image_fn, mask_fn, label_fn in zip(image_fns, mask_fns, label_fns)])
 
     # generate DF #
     SNI_fns = sorted([os.path.join(output_dir, fn) for fn in os.listdir(output_dir) if os.path.isfile(os.path.join(output_dir, fn))])
