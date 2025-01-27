@@ -29,6 +29,7 @@ from tifffile import imread
 from glob import glob
 from cellcyclenet.unet3d.model import UNet3D
 from cellcyclenet import models
+from unet2d import UNet2D
 from torch.utils.data import Dataset, DataLoader
 import torchvision.transforms.v2 as transforms 
 from skimage.transform import downscale_local_mean
@@ -88,16 +89,29 @@ class CCN_Dataset(Dataset):
 
 class CellCycleNet:
 
-    def __init__(self, state_dict_path=None):
-        # Initialize device and model architecture, load model weights #
+    def __init__(self, state_dict_path=None, is_3d=True):
+        # initialize device as GPU if available, otherwise CPU #
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.model = UNet3D(in_channels=1, out_channels=1, is_segmentation=False, f_maps=32)
-        self.model = torch.nn.DataParallel(self.model)
-        if state_dict_path is None:
-            state_dict_path = pkg_resources.files(models).joinpath('pretrained-model.pt')
-        if torch.cuda.is_available():
-            state_dict = torch.load(state_dict_path)
+        self.is_3d = is_3d
+
+        # initialize model architecture #
+        if self.is_3d:
+            self.model = UNet3D(in_channels=1, out_channels=1, is_segmentation=False, f_maps=32)
         else:
+            self.model = UNet2D(in_channels=1, init_features=32)
+        self.model = torch.nn.DataParallel(self.model)
+
+        # if user does not provide a path to weights, load pretrained weights #
+        if state_dict_path is None:
+            if self.is_3d:
+                state_dict_path = pkg_resources.files(models).joinpath('pretrained-model_3D.pt')
+            else:
+                state_dict_path = pkg_resources.files(models).joinpath('pretrained-model_2D.pt')
+
+        # load model weights #
+        if torch.cuda.is_available(): # load to GPU if available #
+            state_dict = torch.load(state_dict_path)
+        else: # otherwise, load to CPU #
             state_dict = torch.load(state_dict_path, map_location=torch.device('cpu'))
         self.model.load_state_dict(state_dict)
         self.model.to(self.device)
@@ -156,9 +170,10 @@ class CellCycleNet:
             images.to(self.device)
             labels.to(self.device)
 
-            # reshape images to [batch, channel, Z, Y, X] #
-            images = torch.swapaxes(images, 1, 2)
-            images = torch.unsqueeze(images, 1)
+            # for 3D images, reshape images to [batch, channel, Z, Y, X] #
+            if self.is_3d:
+                images = torch.swapaxes(images, 1, 2)
+                images = torch.unsqueeze(images, 1)
 
             ### FORWARD PASS ###
             outputs = self.model(images)
@@ -308,9 +323,10 @@ class CellCycleNet:
                 images = images.to(self.device)
                 labels = labels.to(self.device)
 
-                # Reshape to [batch, channels, Z, Y, X] #
-                images = torch.swapaxes(images, 1, 2)
-                images = torch.unsqueeze(images, 1)
+                # for 3D images, reshape to [batch, channels, Z, Y, X] #
+                if self.is_3d:
+                    images = torch.swapaxes(images, 1, 2)
+                    images = torch.unsqueeze(images, 1)
 
                 # Run inference #
                 outputs = self.model(images)
@@ -408,7 +424,10 @@ class CellCycleNet:
         if not hide_plot:
             plt.figure(figsize=figsize)
             plt.axis('off')
-            plt.imshow(np.max(image, axis=0))
+            if self.is_3d:
+                plt.imshow(np.max(image, axis=0))
+            else:
+                plt.imshow(image)
             plt.title(f'Index: {index} / Label: {label} / Pred: {pred} / Prob: {prob:.3f}', fontsize=10)
             plt.show()
 
