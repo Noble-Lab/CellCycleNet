@@ -87,9 +87,10 @@ def _calc_norm_and_scale_factor(image_fns, mask_fns, num_cores, is_3d):
     else:
         pretrained_dims = np.array([37, 37])
     user_dims = np.median(median_dims, axis=0)
+    max_dims = np.max(median_dims, axis=0)
     scale_factor = user_dims / pretrained_dims
     
-    return norm_factor, scale_factor
+    return norm_factor, scale_factor, max_dims
 
 ####################################################################################################
 
@@ -108,7 +109,12 @@ def _gen_SNI(args):
     output_dir = args[2]
     norm_factor = args[3]
     scale_factor = args[4]
-    is_3d = args[5]
+    max_dims = args[5]
+    is_3d = args[6]
+
+    # set padding to 1/8 of max dims #
+    if is_3d: z, y, x = [1.05*dim for dim in max_dims]
+    else:        y, x = [1.05*dim for dim in max_dims]
 
     # for each object in the mask... #
     obj_nums = np.unique(mask)[1:]
@@ -136,22 +142,20 @@ def _gen_SNI(args):
         out_dims = np.array([int(in_dim / scale) for in_dim, scale in zip(obj_crop.shape, scale_factor)])
         obj_rescale = resize_local_mean(obj_norm, out_dims)
 
-        # SNIs will be padded to have 1/8 of their diameter on each side #
+        # pad image to have 1/8 of its diameter on each side #
         if is_3d:
             obj_z, obj_y, obj_x = obj_rescale.shape
-            z, y, x = [1.25*dim for dim in [obj_z, obj_y, obj_x]]
+            z_pad = (int((z - obj_z) / 2), int((z - obj_z + 1) / 2))
+            y_pad = (int((y - obj_y) / 2), int((y - obj_y + 1) / 2))
+            x_pad = (int((x - obj_x) / 2), int((x - obj_x + 1) / 2))
+            obj_pad = np.pad(obj_rescale, [z_pad, y_pad, x_pad])
         else:
             obj_y, obj_x = obj_rescale.shape
-            y, x = [1.25*dim for dim in [obj_y, obj_x]]
+            y_pad = (int((y - obj_y) / 2), int((y - obj_y + 1) / 2))
+            x_pad = (int((x - obj_x) / 2), int((x - obj_x + 1) / 2))
+            obj_pad = np.pad(obj_rescale, [y_pad, x_pad])
 
-        # calculate padding #
-        x_add = (int(floor((x - obj_x) / 2)), int(ceil((x - obj_x) / 2)))
-        y_add = (int(floor((y - obj_y) / 2)), int(ceil((y - obj_y) / 2)))
-        if is_3d: z_add = (int(floor((z - obj_z) / 2)), int(ceil((z - obj_z) / 2)))
-
-        # pad image + save #
-        if is_3d: obj_pad = np.pad(obj_rescale, [z_add, y_add, x_add])
-        else: obj_pad = np.pad(obj_rescale, [y_add, x_add])
+        # save #
         imwrite(f'{output_dir}/{os.path.splitext(os.path.basename(args[0]))[0]}_obj_{obj_num}.tif', obj_pad)
 
 
@@ -171,7 +175,12 @@ def _gen_SNI_label(args):
     output_dir = args[3]
     norm_factor = args[4]
     scale_factor = args[5]
-    is_3d = args[6]
+    max_dims = args[6]
+    is_3d = args[7]
+
+    # set padding to 1/20th of max dims #
+    if is_3d: z, y, x = [1.05*dim for dim in max_dims]
+    else:        y, x = [1.05*dim for dim in max_dims]
 
     # for each object in the mask... #
     obj_nums = np.unique(mask)[1:]
@@ -203,22 +212,20 @@ def _gen_SNI_label(args):
         out_dims = np.array([int(in_dim / scale) for in_dim, scale in zip(obj_crop.shape, scale_factor)])
         obj_rescale = resize_local_mean(obj_norm, out_dims)
 
-        # SNIs will be padded to have 1/8 of their diameter on each side #
+        # pad image to have 1/8 of its diameter on each side #
         if is_3d:
             obj_z, obj_y, obj_x = obj_rescale.shape
-            z, y, x = [1.25*dim for dim in [obj_z, obj_y, obj_x]]
+            z_pad = (int((z - obj_z) / 2), int((z - obj_z + 1) / 2))
+            y_pad = (int((y - obj_y) / 2), int((y - obj_y + 1) / 2))
+            x_pad = (int((x - obj_x) / 2), int((x - obj_x + 1) / 2))
+            obj_pad = np.pad(obj_rescale, [z_pad, y_pad, x_pad])
         else:
             obj_y, obj_x = obj_rescale.shape
-            y, x = [1.25*dim for dim in [obj_y, obj_x]]
+            y_pad = (int((y - obj_y) / 2), int((y - obj_y + 1) / 2))
+            x_pad = (int((x - obj_x) / 2), int((x - obj_x + 1) / 2))
+            obj_pad = np.pad(obj_rescale, [y_pad, x_pad])
 
-        # calculate padding #
-        x_add = (int(floor((x - obj_x) / 2)), int(ceil((x - obj_x) / 2)))
-        y_add = (int(floor((y - obj_y) / 2)), int(ceil((y - obj_y) / 2)))
-        if is_3d: z_add = (int(floor((z - obj_z) / 2)), int(ceil((z - obj_z) / 2)))
-
-        # pad image + save #
-        if is_3d: obj_pad = np.pad(obj_rescale, [z_add, y_add, x_add])
-        else: obj_pad = np.pad(obj_rescale, [y_add, x_add])
+        # save #
         imwrite(f'{output_dir}/{os.path.splitext(os.path.basename(args[0]))[0]}_obj_{obj_num}_class_{label_str}.tif', obj_pad)
 
 
@@ -314,15 +321,15 @@ def generate_images(image_dir, mask_dir, output_dir=None, return_df=False, num_c
     mask_fns = sorted([os.path.join(mask_dir, fn) for fn in os.listdir(mask_dir)])
 
     # calculate normalization and scaling factors #
-    norm_factor, scale_factor = _calc_norm_and_scale_factor(image_fns, mask_fns, num_cores, is_3d)
+    norm_factor, scale_factor, max_dims = _calc_norm_and_scale_factor(image_fns, mask_fns, num_cores, is_3d)
 
     # generate SNIs #
     if num_cores == None:
         for image_fn, mask_fn in zip(image_fns, mask_fns):
-            _gen_SNI([image_fn, mask_fn, output_dir, norm_factor, scale_factor, is_3d])
+            _gen_SNI([image_fn, mask_fn, output_dir, norm_factor, scale_factor, max_dims, is_3d])
     else:
         with Pool(num_cores) as pool:
-            pool.map(_gen_SNI, [(image_fn, mask_fn, output_dir, norm_factor, scale_factor, is_3d) for image_fn, mask_fn in zip(image_fns, mask_fns)])
+            pool.map(_gen_SNI, [(image_fn, mask_fn, output_dir, norm_factor, scale_factor, max_dims, is_3d) for image_fn, mask_fn in zip(image_fns, mask_fns)])
 
     # generate DF #
     SNI_fns = sorted([os.path.join(output_dir, fn) for fn in os.listdir(output_dir) if os.path.isfile(os.path.join(output_dir, fn))])
@@ -371,15 +378,15 @@ def generate_images_labeled(image_dir, mask_dir, label_dir, output_dir=None, ret
     label_fns = sorted([os.path.join(label_dir, fn) for fn in os.listdir(label_dir)])
 
     # calculate normalization and scaling factors #
-    norm_factor, scale_factor = _calc_norm_and_scale_factor(image_fns, mask_fns, num_cores, is_3d)
+    norm_factor, scale_factor, max_dims = _calc_norm_and_scale_factor(image_fns, mask_fns, num_cores, is_3d)
 
     # generate SNIs #
     if num_cores == None:
         for image_fn, mask_fn, label_fn in zip(image_fns, mask_fns, label_fns):
-            _gen_SNI_label([image_fn, mask_fn, label_fn, output_dir, norm_factor, scale_factor, is_3d])
+            _gen_SNI_label([image_fn, mask_fn, label_fn, output_dir, norm_factor, scale_factor, max_dims, is_3d])
     else:
         with Pool(num_cores) as pool:
-            pool.map(_gen_SNI_label, [(image_fn, mask_fn, label_fn, output_dir, norm_factor, scale_factor, is_3d) for image_fn, mask_fn, label_fn in zip(image_fns, mask_fns, label_fns)])
+            pool.map(_gen_SNI_label, [(image_fn, mask_fn, label_fn, output_dir, norm_factor, scale_factor, max_dims, is_3d) for image_fn, mask_fn, label_fn in zip(image_fns, mask_fns, label_fns)])
 
     # generate DF #
     SNI_fns = sorted([os.path.join(output_dir, fn) for fn in os.listdir(output_dir) if os.path.isfile(os.path.join(output_dir, fn))])
