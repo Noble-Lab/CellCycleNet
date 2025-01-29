@@ -29,7 +29,7 @@ from tifffile import imread
 from glob import glob
 from cellcyclenet.unet3d.model import UNet3D
 from cellcyclenet import models
-from unet2d import UNet2D
+from cellcyclenet.unet2d import UNet2D
 from torch.utils.data import Dataset, DataLoader
 import torchvision.transforms.v2 as transforms 
 from skimage.transform import downscale_local_mean
