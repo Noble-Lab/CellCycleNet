@@ -28,8 +28,10 @@ We have released our image data, trained models, and software as a community res
 
 2. Try running the included examples on these example files using the included example notebooks:
 
-	1. [Example #1](https://github.com/Noble-Lab/CellCycleNet/blob/main/notebooks/01_prediction_demo.ipynb): Predict cell cycle stage from segmented DAPI images
-	2. [Example #2](https://github.com/Noble-Lab/CellCycleNet/blob/main/notebooks/02_fine_tune_training_demo.ipynb): Fine tune pre-trained model with additional training
+	1. [Example #1](https://github.com/Noble-Lab/CellCycleNet/blob/main/notebooks/3D_prediction_demo.ipynb): Predict cell cycle stage from segmented 3D DAPI images
+	2. [Example #2](https://github.com/Noble-Lab/CellCycleNet/blob/main/notebooks/3D_fine_tune_training_demo.ipynb): Fine tune pre-trained 3D model with additional training
+	3. [Example #3](https://github.com/Noble-Lab/CellCycleNet/blob/main/notebooks/2D_prediction_demo.ipynb): Predict cell cycle stage from segmented 2D DAPI images
+	4. [Example #4](https://github.com/Noble-Lab/CellCycleNet/blob/main/notebooks/2D_fine_tune_training_demo.ipynb): Fine tune pre-trained 2D model with additional training
 
  ## Contact<a id="contact"></a>
 In case you have questions, reach out to `gangliuw@uw.edu` and/or 'eknich@uw.edu'.
