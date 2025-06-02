@@ -33,6 +33,9 @@ We have released our image data, trained models, and software as a community res
 	3. [Example #3](https://github.com/Noble-Lab/CellCycleNet/blob/main/notebooks/2D_prediction_demo.ipynb): Predict cell cycle stage from segmented 2D DAPI images
 	4. [Example #4](https://github.com/Noble-Lab/CellCycleNet/blob/main/notebooks/2D_fine_tune_training_demo.ipynb): Fine tune pre-trained 2D model with additional training
 
+Data: Raw images for this study can be found at the [BioImage Archive](https://www.ebi.ac.uk/biostudies/BioImages/studies/S-BIAD1752?query=S-BIAD1752) with accession number: S-BIAD1752.
+
+
  ## Contact<a id="contact"></a>
 In case you have questions, reach out to `gangliuw@uw.edu` and/or 'eknich@uw.edu'.
 
@@ -43,9 +46,15 @@ In case you have questions, reach out to `gangliuw@uw.edu` and/or 'eknich@uw.edu
 If you have found our work useful, please consider citing us:
 
 ```
-Predicting cell cycle stage from 3D single-cell nuclear-stained images
-Gang Li, Eva K. Nichols, Valentino E. Browning, Nicolas J. Longhi, Conor Camplisson, Brian J. Beliveau, William Stafford Noble
-bioRxiv 2024.08.30.610553; doi: https://doi.org/10.1101/2024.08.30.610553
+@article{li2025predicting,
+  title={Predicting cell cycle stage from 3D single-cell nuclear-stained images},
+  author={Li, Gang and Nichols, Eva K and Browning, Valentino E and Longhi, Nicolas J and Sanchez-Forman, Madison and Camplisson, Conor K and Beliveau, Brian J and Noble, William Stafford},
+  journal={Life Science Alliance},
+  volume={8},
+  number={6},
+  year={2025},
+  publisher={Life Science Alliance}
+}
 
 ```
 
